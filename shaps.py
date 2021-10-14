@@ -97,3 +97,83 @@ def castro_sam_shap(example, model, y_i, runs=1):
         phi[i] = np.mean(model(s[i][0])[:, y_i] - model(s[i][1])[:, y_i])
 
     return phi
+
+def owen_control_sam_shap(example, model, y_i, runs=2, q_splits=100):
+    n_features = example.shape[0]
+    phi = np.zeros(n_features)
+    s = []
+    gq = []
+    gqm = [0,0]
+
+    for k in range(runs):
+        for q_num in range(q_splits + 1):
+            q = q_num / q_splits
+            s.append(np.array(np.random.binomial(1, q, n_features)))
+            gq.append(q)
+    s = np.array(s)
+
+    gqm[0] = gq
+    gqm[1] = gq
+    gq = np.array(gq)
+    gqm = np.array(gqm)
+
+    v = np.mean(gq)
+
+    for j in range(n_features):
+        mu_2 = example.copy()
+        mu_2[j] = 0
+        s1 = s * mu_2
+        s2 = s1.copy()
+        s2[:, j] = example[j]
+        item = model(s2) - model(s1)
+
+        a = item.shape[0]
+        b = item.shape[1]
+        gqm = gqm.reshape(a,b)
+
+        item1 = item + 0.1*(v - gqm)
+        phi[j] = np.mean(item1[:, y_i])
+    return phi 
+
+def owen_control_sam_shap_halved(example, model, y_i, runs=2, q_splits=100):
+    n_features = example.shape[0]
+    phi = np.zeros(n_features)
+    s = []
+
+    gq = []
+    gqm = [0,0]
+
+    for _ in range(runs):
+        for q_num in range(q_splits // 2 + 1):
+            q = q_num / q_splits
+            b = np.array(np.random.binomial(1, q, n_features))
+            s.append(b)
+            gq.append(q)
+            if q != 0.5:
+                s.append(1 - b)
+                gq.append(1-q)
+    s = np.array(s)
+
+    gqm[0] = gq
+    gqm[1] = gq
+    gq = np.array(gq)
+    gqm = np.array(gqm)
+
+    v = np.mean(gq)
+
+    for j in range(n_features):
+        mu_2 = example.copy()
+        mu_2[j] = 0
+        s1 = s * mu_2
+        s2 = s1.copy()
+        s2[:, j] = example[j]
+        item = model(s2) - model(s1)
+
+        a = item.shape[0]
+        b = item.shape[1]
+        gqm = gqm.reshape(a,b)
+
+        item1 = item + 0.001 * (v - gqm)
+        phi[j] = np.mean(item1[:, y_i])
+
+    return phi
